@@ -1,14 +1,14 @@
-import { Pencil, Trash2, CalendarDays, FileText, Repeat, Bell, ExternalLink, RotateCw, ArrowRight, Camera, AlertTriangle, User } from 'lucide-react';
+import { Pencil, Trash2, CalendarDays, FileText, Repeat, Bell, ExternalLink, RotateCw, ArrowRight, Camera, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import type { ClientWithTeam } from '../lib/database.types';
+import type { Client } from '../lib/database.types';
 import { isOverdue, isDueToday, formatDueStatus, getRecurringIntervalLabel, calculateNextRecurringDate, getShootStatusLabel, getShootStatusColor, needsShootWarning } from '../lib/utils';
 
 interface ClientCardProps {
-  client: ClientWithTeam;
-  onEdit: (client: ClientWithTeam) => void;
+  client: Client;
+  onEdit: (client: Client) => void;
   onDelete: (id: string) => void;
-  onAdvanceDate?: (client: ClientWithTeam, nextDate: string) => void;
+  onAdvanceDate?: (client: Client, nextDate: string) => void;
 }
 
 export function ClientCard({ client, onEdit, onDelete, onAdvanceDate }: ClientCardProps) {
@@ -20,7 +20,7 @@ export function ClientCard({ client, onEdit, onDelete, onAdvanceDate }: ClientCa
 
   const handleAdvanceDate = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (client.is_recurring && client.recurring_interval && onAdvanceDate) {
+    if (client.recurring_enabled && client.recurring_interval && onAdvanceDate) {
       const nextDate = calculateNextRecurringDate(client.due_date, client.recurring_interval);
       onAdvanceDate(client, nextDate);
     }
@@ -44,7 +44,7 @@ export function ClientCard({ client, onEdit, onDelete, onAdvanceDate }: ClientCa
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-xl font-bold text-white">{client.client_name}</h3>
-            {client.is_recurring && client.recurring_interval && (
+            {client.recurring_enabled && client.recurring_interval && (
               <div className="flex items-center gap-1 px-2 py-0.5 bg-hive-yellow/10 border border-hive-yellow/30 rounded-full">
                 <RotateCw className="w-3 h-3 text-hive-yellow" />
                 <span className="text-xs text-hive-yellow font-medium">
@@ -53,28 +53,10 @@ export function ClientCard({ client, onEdit, onDelete, onAdvanceDate }: ClientCa
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {client.package && (
-              <div className="flex items-center gap-1.5 px-2 py-1 glass-dark rounded-lg">
-                <FileText className="w-3.5 h-3.5 text-hive-yellow" />
-                <span className="text-xs text-gray-400">{client.package}</span>
-              </div>
-            )}
-            {(client.posts_per_month !== null || client.ads_per_month !== null) && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-hive-yellow/10 rounded-lg border border-hive-yellow/30">
-                <FileText className="w-3.5 h-3.5 text-hive-yellow" />
-                <span className="text-xs text-hive-yellow font-semibold">
-                  {client.posts_per_month || 0} • {client.ads_per_month || 0}
-                </span>
-              </div>
-            )}
-          </div>
-          {client.manager && (
+          {client.package && (
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-full bg-hive-yellow/20 flex items-center justify-center">
-                <User className="w-3.5 h-3.5 text-hive-yellow" />
-              </div>
-              <span className="text-sm text-gray-300">{client.manager.name}</span>
+              <FileText className="w-4 h-4 text-hive-yellow" />
+              <span className="text-sm text-gray-400">{client.package}</span>
             </div>
           )}
           {client.monthly_reporting_canva_link && (
@@ -147,6 +129,14 @@ export function ClientCard({ client, onEdit, onDelete, onAdvanceDate }: ClientCa
           </div>
         )}
 
+        {client.posts_per_month && (
+          <div className="flex items-center gap-2 text-sm">
+            <Repeat className="w-4 h-4 text-hive-yellow" />
+            <span className="text-gray-400">
+              <span className="text-white font-semibold">{client.posts_per_month}</span> posts/month
+            </span>
+          </div>
+        )}
 
         <div className="glass-dark rounded-xl p-3">
           <div className="flex items-center justify-between">
@@ -184,7 +174,7 @@ export function ClientCard({ client, onEdit, onDelete, onAdvanceDate }: ClientCa
         </div>
       )}
 
-      {client.is_recurring && client.recurring_interval && onAdvanceDate && (
+      {client.recurring_enabled && client.recurring_interval && onAdvanceDate && (
         <button
           onClick={handleAdvanceDate}
           className="w-full mb-3 flex items-center justify-center gap-2 px-4 py-2 glass-dark text-hive-yellow hover:bg-hive-yellow/10 rounded-xl transition-all text-sm font-medium border border-hive-yellow/20 hover:border-hive-yellow/40"

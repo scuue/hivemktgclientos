@@ -7,15 +7,14 @@ import { ClientCard } from './components/ClientCard';
 import { ClientModal } from './components/ClientModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { CalendarView } from './components/CalendarView';
-import { ClientDetailPage } from './components/ClientDetailPage';
-import { fetchClientsWithTeam, addClient, addClientWithTeamAndPlan, updateClient, deleteClient } from './lib/api';
+import { fetchClients, addClient, updateClient, deleteClient } from './lib/api';
 import { isOverdue, isDueToday, isDueThisWeek } from './lib/utils';
-import type { Client, ClientInsert, ClientWithTeam } from './lib/database.types';
+import type { Client, ClientInsert } from './lib/database.types';
 
 type ViewType = 'grid' | 'calendar';
 
 function App() {
-  const [clients, setClients] = useState<ClientWithTeam[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
@@ -23,11 +22,8 @@ function App() {
   const [viewType, setViewType] = useState<ViewType>('grid');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [detailClient, setDetailClient] = useState<Client | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
-  const [roleFilter, setRoleFilter] = useState<'any' | 'manager' | 'editor' | 'scripting'>('any');
 
   useEffect(() => {
     loadClients();
@@ -36,7 +32,7 @@ function App() {
   async function loadClients() {
     try {
       setLoading(true);
-      const data = await fetchClientsWithTeam();
+      const data = await fetchClients();
       setClients(data);
     } catch (error) {
       console.error('Failed to load clients:', error);
@@ -44,16 +40,6 @@ function App() {
       setLoading(false);
     }
   }
-
-  const allUsers = useMemo(() => {
-    const userMap = new Map();
-    clients.forEach(client => {
-      if (client.manager) userMap.set(client.manager.id, client.manager);
-      client.editors.forEach(e => userMap.set(e.id, e));
-      client.scripting.forEach(s => userMap.set(s.id, s));
-    });
-    return Array.from(userMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [clients]);
 
   const filteredAndSortedClients = useMemo(() => {
     let filtered = clients;
@@ -89,24 +75,6 @@ function App() {
         break;
     }
 
-    if (assigneeFilter !== 'all') {
-      filtered = filtered.filter(client => {
-        if (client.manager?.id === assigneeFilter) return true;
-        if (client.editors.some(e => e.id === assigneeFilter)) return true;
-        if (client.scripting.some(s => s.id === assigneeFilter)) return true;
-        return false;
-      });
-    }
-
-    if (roleFilter !== 'any') {
-      filtered = filtered.filter(client => {
-        if (roleFilter === 'manager') return !!client.manager;
-        if (roleFilter === 'editor') return client.editors.length > 0;
-        if (roleFilter === 'scripting') return client.scripting.length > 0;
-        return true;
-      });
-    }
-
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'due_date':
@@ -125,21 +93,12 @@ function App() {
     });
 
     return sorted;
-  }, [clients, searchQuery, activeFilter, sortBy, assigneeFilter, roleFilter]);
+  }, [clients, searchQuery, activeFilter, sortBy]);
 
-  const handleAddClient = async (
-    clientData: ClientInsert,
-    team?: { managerId?: string; editorIds: string[]; scriptingIds: string[] },
-    monthlyPlan?: { month: string; posts_planned: number; ads_planned: number }
-  ) => {
+  const handleAddClient = async (clientData: ClientInsert) => {
     try {
-      if (team || monthlyPlan) {
-        const newClient = await addClientWithTeamAndPlan(clientData, team, monthlyPlan);
-        setClients([...clients, newClient]);
-      } else {
-        const newClient = await addClient(clientData);
-        await loadClients();
-      }
+      const newClient = await addClient(clientData);
+      setClients([...clients, newClient]);
     } catch (error) {
       throw error;
     }
@@ -179,10 +138,6 @@ function App() {
   };
 
   const handleEdit = (client: Client) => {
-    setDetailClient(client);
-  };
-
-  const handleQuickEdit = (client: Client) => {
     setEditingClient(client);
     setIsModalOpen(true);
   };
@@ -190,14 +145,6 @@ function App() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingClient(null);
-  };
-
-  const handleCloseDetail = () => {
-    setDetailClient(null);
-  };
-
-  const handleUpdateFromDetail = (updated: Client) => {
-    setClients(clients.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
   };
 
   const exportToCSV = () => {
@@ -301,22 +248,21 @@ function App() {
 
         <main className="flex-1 p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col gap-4 mb-8">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setIsMobileSidebarOpen(true)}
-                    className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <Menu className="w-6 h-6" />
-                  </button>
-                  <h2 className="text-2xl font-bold text-white">
-                    {getFilterTitle()}
-                    <span className="ml-3 text-hive-yellow">({filteredAndSortedClients.length})</span>
-                  </h2>
-                </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                  className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+                <h2 className="text-2xl font-bold text-white">
+                  {getFilterTitle()}
+                  <span className="ml-3 text-hive-yellow">({filteredAndSortedClients.length})</span>
+                </h2>
+              </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className="glass-dark rounded-xl p-1 flex items-center gap-1">
                   <button
                     onClick={() => setViewType('grid')}
@@ -364,49 +310,6 @@ function App() {
                 </label>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-400">Team Member:</label>
-                <select
-                  value={assigneeFilter}
-                  onChange={(e) => setAssigneeFilter(e.target.value)}
-                  className="px-3 py-2 glass-dark text-white rounded-xl border border-white/10 focus:border-hive-yellow focus:outline-none focus:ring-2 focus:ring-hive-yellow/20 transition-all text-sm"
-                >
-                  <option value="all">All</option>
-                  {allUsers.map(user => (
-                    <option key={user.id} value={user.id}>{user.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-400">Role:</label>
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value as 'any' | 'manager' | 'editor' | 'scripting')}
-                  className="px-3 py-2 glass-dark text-white rounded-xl border border-white/10 focus:border-hive-yellow focus:outline-none focus:ring-2 focus:ring-hive-yellow/20 transition-all text-sm"
-                >
-                  <option value="any">Any</option>
-                  <option value="manager">Manager</option>
-                  <option value="editor">Editor</option>
-                  <option value="scripting">Scripting</option>
-                </select>
-              </div>
-
-              {(assigneeFilter !== 'all' || roleFilter !== 'any') && (
-                <button
-                  onClick={() => {
-                    setAssigneeFilter('all');
-                    setRoleFilter('any');
-                  }}
-                  className="px-3 py-2 text-xs glass-dark text-gray-400 hover:text-white rounded-xl transition-all"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          </div>
 
             {loading ? (
               <div className="flex items-center justify-center py-20">
@@ -504,14 +407,6 @@ function App() {
         }}
         clientName={deleteConfirm?.name || ''}
       />
-
-      {detailClient && (
-        <ClientDetailPage
-          client={detailClient}
-          onClose={handleCloseDetail}
-          onUpdate={handleUpdateFromDetail}
-        />
-      )}
     </div>
   );
 }
