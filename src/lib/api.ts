@@ -284,3 +284,59 @@ export async function fetchClientsWithTeam(): Promise<ClientWithTeam[]> {
 
   return clientsWithTeam;
 }
+
+export async function addClientWithTeamAndPlan(
+  clientData: ClientInsert,
+  team?: {
+    managerId?: string;
+    editorIds: string[];
+    scriptingIds: string[];
+  },
+  monthlyPlan?: {
+    month: string;
+    posts_planned: number;
+    ads_planned: number;
+  }
+): Promise<ClientWithTeam> {
+  const newClient = await addClient(clientData);
+
+  if (team && (team.managerId || team.editorIds.length > 0 || team.scriptingIds.length > 0)) {
+    const assignments: ClientTeamAssignmentInsert[] = [];
+
+    if (team.managerId) {
+      assignments.push({ client_id: newClient.id, user_id: team.managerId, role: 'manager' });
+    }
+
+    team.editorIds.forEach(id => {
+      assignments.push({ client_id: newClient.id, user_id: id, role: 'editor' as TeamRole });
+    });
+
+    team.scriptingIds.forEach(id => {
+      assignments.push({ client_id: newClient.id, user_id: id, role: 'scripting' as TeamRole });
+    });
+
+    if (assignments.length > 0) {
+      const { error } = await supabase
+        .from('client_team_assignments')
+        .insert(assignments);
+
+      if (error) {
+        throw new Error(`Failed to assign team: ${error.message}`);
+      }
+    }
+  }
+
+  if (monthlyPlan) {
+    await upsertMonthlyPlan(newClient.id, monthlyPlan.month, {
+      posts_planned: monthlyPlan.posts_planned,
+      ads_planned: monthlyPlan.ads_planned,
+    });
+  }
+
+  const teamData = await fetchClientTeam(newClient.id);
+
+  return {
+    ...newClient,
+    ...teamData,
+  };
+}

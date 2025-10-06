@@ -8,7 +8,7 @@ import { ClientModal } from './components/ClientModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { CalendarView } from './components/CalendarView';
 import { ClientDetailPage } from './components/ClientDetailPage';
-import { fetchClientsWithTeam, addClient, updateClient, deleteClient } from './lib/api';
+import { fetchClientsWithTeam, addClient, addClientWithTeamAndPlan, updateClient, deleteClient } from './lib/api';
 import { isOverdue, isDueToday, isDueThisWeek } from './lib/utils';
 import type { Client, ClientInsert, ClientWithTeam } from './lib/database.types';
 
@@ -127,10 +127,19 @@ function App() {
     return sorted;
   }, [clients, searchQuery, activeFilter, sortBy, assigneeFilter, roleFilter]);
 
-  const handleAddClient = async (clientData: ClientInsert) => {
+  const handleAddClient = async (
+    clientData: ClientInsert,
+    team?: { managerId?: string; editorIds: string[]; scriptingIds: string[] },
+    monthlyPlan?: { month: string; posts_planned: number; ads_planned: number }
+  ) => {
     try {
-      const newClient = await addClient(clientData);
-      setClients([...clients, newClient]);
+      if (team || monthlyPlan) {
+        const newClient = await addClientWithTeamAndPlan(clientData, team, monthlyPlan);
+        setClients([...clients, newClient]);
+      } else {
+        const newClient = await addClient(clientData);
+        await loadClients();
+      }
     } catch (error) {
       throw error;
     }
